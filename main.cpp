@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <vector>
 #include <cmath>
+
+#include "InterpolateUniformGridData.h"
 using namespace std;
 
 typedef struct {
@@ -17,7 +19,8 @@ typedef struct {
     double xllcorner;
     double yllcorner;
     double cellsize;
-    vector<double>  bathymetry;
+    //vector<double>  bathymetry;
+    InterpolatedUniformGridData * interpolate;
 } arcgis_data_t; 
 
 
@@ -31,21 +34,42 @@ void ArcGisReader(arcgis_data_t* grid, const char* fname)
     }
     double scale = 1.0E-05;
     
+    
     fscanf(fin,"ncols       %d\n", &grid->ncols);
     fscanf(fin,"nrows       %d\n", &grid->nrows);
     fscanf(fin,"xllcorner   %lf\n", &grid->xllcorner);
     fscanf(fin,"yllcorner   %lf\n", &grid->yllcorner);
     fscanf(fin,"cellsize    %lf\n", &grid->cellsize);
-    grid->bathymetry.resize(grid->ncols*grid->nrows);
+    //grid->bathymetry.resize(grid->ncols*grid->nrows);
+    
+    std::vector< std::vector< double> >  data_value(grid->nrows);
+    
     for(int i=0; i < grid->nrows; ++i)
     {
+        data_value[i].resize(grid->ncols);
         for(int j = 0; j < grid->ncols; ++j)
         {
             int tmp;
             fscanf(fin,"%d", &tmp);
-            grid->bathymetry[i*grid->ncols+j] = (double) scale*tmp;
+            //grid->bathymetry[i*grid->ncols+j] = (double) scale*tmp;
+            data_value[i][j] = tmp;
         }
     }
+    
+    std::pair<double, double> x,y;
+    x.first  = grid->xllcorner;
+    x.second = grid->xllcorner + grid->nrows*grid->cellsize;
+    y.first  = grid->yllcorner;
+    y.second = grid->yllcorner + grid->ncols*grid->cellsize;
+    std::vector< std::pair<double, double> > end_points;
+    end_points.push_back(x);
+    end_points.push_back(y);
+    
+    std::vector<int> n_intervals(2);
+    n_intervals[0] = grid->nrows;
+    n_intervals[1] = grid->ncols;
+    
+    grid->interpolate = new InterpolatedUniformGridData(end_points,n_intervals,data_value);
     
     fclose(fin);
 }
@@ -78,11 +102,15 @@ void ArcGisWriteSTL(arcgis_data_t* grid, const char* fname)
             x[0] = scale*(grid->xllcorner+(j  )*grid->cellsize);
             x[1] = scale*(grid->xllcorner+(j+1)*grid->cellsize);
                    
-            z[0][0] = grid->bathymetry[(i  )*grid->ncols+(j  )];
-            z[1][0] = grid->bathymetry[(i  )*grid->ncols+(j+1)];
-            z[0][1] = grid->bathymetry[(i+1)*grid->ncols+(j  )];
-            z[1][1] = grid->bathymetry[(i+1)*grid->ncols+(j+1)];       
-                   
+            //z[0][0] = grid->bathymetry[(i  )*grid->ncols+(j  )];
+            //z[1][0] = grid->bathymetry[(i  )*grid->ncols+(j+1)];
+            //z[0][1] = grid->bathymetry[(i+1)*grid->ncols+(j  )];
+            //z[1][1] = grid->bathymetry[(i+1)*grid->ncols+(j+1)];       
+            z[0][0] = grid->interpolate->value(x[0],y[0]);
+            z[1][0] = grid->interpolate->value(x[1],y[0]);
+            z[0][1] = grid->interpolate->value(x[0],y[1]);
+            z[1][1] = grid->interpolate->value(x[1],y[1]);
+            
             //facet 1:
             //  z[0][1]
             //     +----------+ z[1][1]
@@ -174,7 +202,7 @@ void ArcGisWriteSTL(arcgis_data_t* grid, const char* fname)
     
 }
 
-
+/*
 void ArcGisWriteGmshGEO(arcgis_data_t* grid, const char* fname)
 {
     int np = 0;
@@ -207,6 +235,7 @@ void ArcGisWriteGmshGEO(arcgis_data_t* grid, const char* fname)
     fclose(fout);
     
 }
+ * */
 
 
 
